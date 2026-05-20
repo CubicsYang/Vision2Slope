@@ -161,7 +161,10 @@ class ProcessingConfig:
     panorama_phi: float = 0.0  # Vertical angle
     panorama_aspects: tuple = (10, 10)  # Aspect ratio
     panorama_show_size: int = 100  # Scale factor
-    
+
+    # Metadata for signed slope estimation
+    metadata_csv: Optional[str] = None  # CSV with pano_id, heading, edge_bearing columns
+
     def validate(self):
         """Validate processing configuration."""
         valid_log_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -175,6 +178,8 @@ class ProcessingConfig:
             raise ConfigurationError("panorama_fov must be between 0 and 180 degrees")
         if len(self.panorama_aspects) != 2 or any(a <= 0 for a in self.panorama_aspects):
             raise ConfigurationError("panorama_aspects must be a tuple of two positive numbers")
+        if self.metadata_csv is not None and not os.path.exists(self.metadata_csv):
+            raise ConfigurationError(f"metadata_csv file does not exist: {self.metadata_csv}")
 
 
 @dataclass
@@ -272,7 +277,8 @@ class PipelineConfig:
             use_multiprocessing=args.use_multiprocessing,
             is_panorama=getattr(args, 'is_panorama', False),
             panorama_fov=getattr(args, 'panorama_fov', 90.0),
-            panorama_phi=getattr(args, 'panorama_phi', 0.0)
+            panorama_phi=getattr(args, 'panorama_phi', 0.0),
+            metadata_csv=getattr(args, 'metadata_csv', None)
         )
         
         return cls(

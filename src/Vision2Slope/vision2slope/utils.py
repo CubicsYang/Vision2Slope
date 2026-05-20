@@ -120,7 +120,7 @@ class Utils:
 
         Args:
             semantic_array: (H, W) semantic segmentation array with class IDs
-            
+
         Returns:
             rgb_array: (H, W, 3) RGB image, dtype=uint8
         """
@@ -133,3 +133,69 @@ class Utils:
             rgb_array[mask] = color
 
         return rgb_array
+
+    @staticmethod
+    def angle_difference(angle1: float, angle2: float) -> float:
+        """
+        Compute the minimum angular difference between two bearings.
+
+        Args:
+            angle1: First bearing in degrees (0-360, north=0, clockwise)
+            angle2: Second bearing in degrees (0-360, north=0, clockwise)
+
+        Returns:
+            Absolute angular difference in degrees (0-180)
+        """
+        diff = (angle1 - angle2) % 360
+        if diff > 180:
+            diff = 360 - diff
+        return diff
+
+    @staticmethod
+    def compute_signed_slope(
+        road_edge_angle: float,
+        perspective_angle: float,
+        heading: float,
+        edge_bearing: float
+    ) -> float:
+        """
+        Compute signed slope along the OSM edge (u→v) direction.
+
+        Geometry:
+        - Right view (perspective=90°): image left→right corresponds to
+          behind-heading → ahead-of-heading. Positive road_edge_angle means
+          the road goes uphill in the heading direction.
+        - Left view (perspective=270°): image left→right corresponds to
+          ahead-of-heading → behind-heading. Positive road_edge_angle means
+          the road goes downhill in the heading direction (sign is inverted).
+        - If heading aligns with edge_bearing (Δ < 90°), keep the sign.
+          If opposite (Δ > 90°), flip the sign.
+
+        Args:
+            road_edge_angle: RANSAC-fitted road edge angle (degrees)
+            perspective_angle: Perspective view direction (90 or 270)
+            heading: GSV camera heading (degrees, north=0, clockwise)
+            edge_bearing: OSM edge u→v bearing (degrees, north=0, clockwise)
+
+        Returns:
+            Signed slope angle (positive = uphill along u→v, negative = downhill)
+        """
+        slope = abs(road_edge_angle)
+
+        # Step 1: Determine slope sign relative to heading direction
+        if perspective_angle == 90:
+            # Right view: positive angle = uphill in heading direction
+            slope_along_heading = slope if road_edge_angle > 0 else -slope
+        elif perspective_angle == 270:
+            # Left view: positive angle = downhill in heading direction
+            slope_along_heading = -slope if road_edge_angle > 0 else slope
+        else:
+            slope_along_heading = slope if road_edge_angle > 0 else -slope
+
+        # Step 2: Align with OSM edge direction
+        delta = Utils.angle_difference(heading, edge_bearing)
+        if delta > 90:
+            # Heading is roughly opposite to edge direction, flip sign
+            slope_along_heading = -slope_along_heading
+
+        return slope_along_heading

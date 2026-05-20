@@ -32,6 +32,11 @@ from .visualizers import Visualizer
 from .utils import Utils
 from .pano2perspective import PanoramaTransformer
 
+try:
+    from .downloader import GSVDownloader
+except ImportError:
+    GSVDownloader = None
+
 # Core abstractions
 from .core import (
     ImageProcessor,
@@ -71,6 +76,7 @@ __all__ = [
     "Visualizer",
     "Utils",
     "PanoramaTransformer",
+    "GSVDownloader",
     
     # Core abstractions (interfaces)
     "ImageProcessor",

@@ -85,7 +85,11 @@ def create_argument_parser() -> argparse.ArgumentParser:
                        help="Field of view for panorama transformation")
     parser.add_argument("--panorama-phi", type=float, default=0.0,
                        help="Vertical angle for panorama transformation")
-    
+
+    # Signed slope estimation
+    parser.add_argument("--metadata-csv", type=str, default=None,
+                       help="CSV file with pano_id, heading, edge_bearing columns for signed slope estimation")
+
     return parser
 
 

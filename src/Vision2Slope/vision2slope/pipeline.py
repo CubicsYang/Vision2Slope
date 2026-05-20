@@ -356,52 +356,117 @@ class Vision2SlopePipeline:
     def _bi_slope_estimate(self, df: pd.DataFrame, csv_path: Path) -> pd.DataFrame:
         """
         Estimate slope using bi-directional approach.
-        
+
+        If metadata_csv is provided (with heading and edge_bearing columns),
+        computes signed slope along the OSM edge (u→v) direction.
+        Otherwise falls back to absolute-value estimation.
+
         Args:
             df: DataFrame with results
             csv_path: Path where original CSV was saved
-            
+
         Returns:
             DataFrame with adjusted slopes
         """
         filtered_df = df[df['status'] == 'success'].copy()
-        
+
         if filtered_df.empty:
             self.logger.warning("No successful results for bi-directional slope estimation")
             return df
-        
+
         # Extract pano_id and perspective_angle from filename
         filtered_df['pano_id'] = filtered_df['filename'].apply(Utils.get_pano_id_from_path)
         filtered_df['perspective_angle'] = filtered_df['filename'].apply(
-            lambda x: Utils.get_perspective_angle_from_path(x) 
+            lambda x: Utils.get_perspective_angle_from_path(x)
             if '_Direction_' in x else 0.0
         )
-        
+
         # Filter by angle threshold
         angle_threshold = self.config.analysis_config.filter_slope_angle
         filtered_df = filtered_df[filtered_df['road_edge_line_angle'].abs() <= angle_threshold]
-        
+
         if filtered_df.empty:
             self.logger.warning("No valid segments after angle filtering")
             return df
-        
+
         self.logger.info(f"Found {len(filtered_df)} valid segments for bi-directional estimation")
-        
-        # Compute road slope per pano_id
-        estimate_slope_list = {}
-        grouped = filtered_df.groupby('pano_id')
 
-        for pano_id, group in tqdm(grouped, desc="Computing road slopes"):
-            if self.config.analysis_config.use_weighted_average:
-                slope_per_pano = np.average(
-                    np.abs(group['road_edge_line_angle']), 
-                    weights=group['road_area']
+        # Check if metadata is available for signed slope estimation
+        metadata_csv_path = self.config.processing_config.metadata_csv
+        use_signed = False
+
+        if metadata_csv_path is not None:
+            metadata_df = pd.read_csv(metadata_csv_path)
+            metadata_df['pano_id'] = metadata_df['pano_id'].astype(str)
+            metadata_df = metadata_df.drop_duplicates(subset='pano_id', keep='first')
+
+            required_cols = {'pano_id', 'heading', 'edge_bearing'}
+            if required_cols.issubset(metadata_df.columns):
+                filtered_df = filtered_df.merge(
+                    metadata_df[['pano_id', 'heading', 'edge_bearing']],
+                    on='pano_id',
+                    how='left'
                 )
-            else:
-                slope_per_pano = np.abs(group['road_edge_line_angle']).mean()
-            estimate_slope_list[pano_id] = slope_per_pano
+                has_metadata = filtered_df['heading'].notna() & filtered_df['edge_bearing'].notna()
 
-        filtered_df['road_estimated_slope'] = np.abs(filtered_df['pano_id'].map(estimate_slope_list))
+                if has_metadata.any():
+                    use_signed = True
+                    self.logger.info("Using signed slope estimation with heading and edge_bearing metadata")
+                else:
+                    self.logger.warning("No matching metadata found for any pano_id, falling back to absolute slope")
+            else:
+                missing = required_cols - set(metadata_df.columns)
+                self.logger.warning(f"metadata_csv missing columns {missing}, falling back to absolute slope")
+
+        if use_signed:
+            # Compute signed slope for each row
+            filtered_df['signed_slope'] = filtered_df.apply(
+                lambda row: Utils.compute_signed_slope(
+                    row['road_edge_line_angle'],
+                    row['perspective_angle'],
+                    row['heading'],
+                    row['edge_bearing']
+                ) if pd.notna(row.get('heading')) and pd.notna(row.get('edge_bearing'))
+                else np.nan,
+                axis=1
+            )
+
+            # Aggregate signed slope per pano_id
+            estimate_slope_list = {}
+            grouped = filtered_df.groupby('pano_id')
+
+            for pano_id, group in tqdm(grouped, desc="Computing signed road slopes"):
+                valid = group['signed_slope'].dropna()
+                if valid.empty:
+                    continue
+                if self.config.analysis_config.use_weighted_average:
+                    valid_mask = group['signed_slope'].notna()
+                    slope_per_pano = np.average(
+                        group.loc[valid_mask, 'signed_slope'],
+                        weights=group.loc[valid_mask, 'road_area']
+                    )
+                else:
+                    slope_per_pano = valid.mean()
+                estimate_slope_list[pano_id] = slope_per_pano
+
+            filtered_df['road_estimated_slope'] = filtered_df['pano_id'].map(estimate_slope_list)
+            filtered_df['road_estimated_slope_abs'] = filtered_df['road_estimated_slope'].abs()
+        else:
+            # Original absolute-value behavior
+            estimate_slope_list = {}
+            grouped = filtered_df.groupby('pano_id')
+
+            for pano_id, group in tqdm(grouped, desc="Computing road slopes"):
+                if self.config.analysis_config.use_weighted_average:
+                    slope_per_pano = np.average(
+                        np.abs(group['road_edge_line_angle']),
+                        weights=group['road_area']
+                    )
+                else:
+                    slope_per_pano = np.abs(group['road_edge_line_angle']).mean()
+                estimate_slope_list[pano_id] = slope_per_pano
+
+            filtered_df['road_estimated_slope'] = np.abs(filtered_df['pano_id'].map(estimate_slope_list))
 
         # Save estimated results
         estimate_csv_path = csv_path.parent / csv_path.name.replace('.csv', '_estimate.csv')
