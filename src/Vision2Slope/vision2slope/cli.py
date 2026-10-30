@@ -17,11 +17,6 @@ def create_argument_parser() -> argparse.ArgumentParser:
     )
     
     # Required arguments
-    # parser.add_argument("--input_dir", default="/Users/cubics/Vision2Slope/uncertainty_analysis/roll/roll-panos/chunk_-5_rolled/perspective",
-    #                    help="Input directory containing images")
-    # parser.add_argument("--output_dir", default="/Users/cubics/Vision2Slope/uncertainty_analysis/roll/roll-test",
-    #                    help="Output directory for results")
-    
     parser.add_argument("--input_dir", required=True, 
                        help="Input directory containing images")
     parser.add_argument("--output_dir", required=True, 
@@ -30,7 +25,9 @@ def create_argument_parser() -> argparse.ArgumentParser:
     # Model configuration
     parser.add_argument("--model", default="facebook/mask2former-swin-large-mapillary-vistas-semantic",
                        help="Segmentation model name")
-    
+    parser.add_argument("--device", default=None,
+                       help="Torch device for the model, e.g. cuda or cpu (default: cuda if available)")
+
     # Skew detection parameters
     parser.add_argument("--canny-low", type=float, default=50.0,
                        help="Lower threshold for Canny edge detection")
@@ -46,8 +43,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
                        help="Tolerance for angle estimation in degrees")
     
     # Image correction parameters
-    parser.add_argument("--weighted-average", action="store_true",
-                       help="Use weighted average for angle calculation")
+    parser.add_argument("--weighted-average", action=argparse.BooleanOptionalAction, default=True,
+                       help="Weight each view by road area when averaging views of a panorama")
     
     # Road analysis parameters
     parser.add_argument("--min-edge-points", type=int, default=10,
@@ -104,11 +101,9 @@ def main():
         
         # Run pipeline
         pipeline = Vision2SlopePipeline(config)
-        
-        if args.use_multiprocessing:
-            results_df = pipeline.process_batch_parallel(args.num_workers)
-        else:
-            results_df = pipeline.process_batch()
+
+        # Runs in parallel when --use-multiprocessing is set
+        results_df = pipeline.process_batch()
         
         # results_df holds only the views kept for slope estimation
         if len(results_df) > 0:

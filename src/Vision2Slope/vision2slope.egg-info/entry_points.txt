@@ -1,2 +1,0 @@
-[console_scripts]
-vision2slope = vision2slope.cli:main

@@ -2,3 +2,20 @@
 uncertainty_analysis/panoramas
 uncertainty_analysis/subsamples_result.gpkg
 
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Example outputs
+examples/output/
+examples/output_pano/
+
+# Local tooling
+CLAUDE.md
+.claude
+.github
+.vscode

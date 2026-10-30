@@ -48,6 +48,11 @@ Please refer to the [Tutorial](examples/Vision2Slope_Tutorial.ipynb) or [Script]
 ```bash
 python -m pip install -e ./src/Vision2Slope
 ```
+Python 3.9–3.12 is supported. Optional extras: `[gsv]` installs `streetlevel` for the Google Street View downloader, and `[test]` installs `pytest`. To run the offline test suite (no model download):
+```bash
+python -m pip install -e "./src/Vision2Slope[test]"
+python -m pytest tests
+```
 2. Import the pipeline in Python:
 ```python
 from vision2slope import (

@@ -70,7 +70,11 @@ def _init_worker(config: PipelineConfig):
 
     # No visualizer in workers to avoid I/O contention
     _worker_processor = StandardImageProcessor(
-        segmentation_provider=SegmentationModel(config.model_config.model_name),
+        segmentation_provider=SegmentationModel(
+            config.model_config.model_name,
+            device=config.model_config.device,
+            cache_dir=config.model_config.cache_dir
+        ),
         skew_detector=SkewDetector(legacy_config),
         corrector=ImageCorrector(legacy_config),
         slope_analyzer=RoadSlopeAnalyzer(legacy_config),
@@ -117,8 +121,10 @@ class Vision2SlopePipeline:
         """Setup logging configuration."""
         log_file_path = self.output_path / 'pipeline.log'
         
-        # Clear any existing handlers
+        # Close and remove handlers left by a previous pipeline (avoids leaking log files)
         logger = logging.getLogger('vision2slope')
+        for handler in logger.handlers:
+            handler.close()
         logger.handlers = []
         logger.setLevel(getattr(logging, self.config.processing_config.log_level))
         
@@ -223,7 +229,11 @@ class Vision2SlopePipeline:
         self.logger.info("Initializing pipeline components...")
         
         # Create components (adapting old classes to new interfaces)
-        segmentation_provider = SegmentationModel(self.config.model_config.model_name)
+        segmentation_provider = SegmentationModel(
+            self.config.model_config.model_name,
+            device=self.config.model_config.device,
+            cache_dir=self.config.model_config.cache_dir
+        )
         
         # Create legacy-compatible config for old components
         legacy_config = _build_legacy_config(self.config)
@@ -248,12 +258,18 @@ class Vision2SlopePipeline:
     def process_batch(self) -> pd.DataFrame:
         """
         Process all images in the input directory.
-        
+
+        Delegates to process_batch_parallel when
+        processing_config.use_multiprocessing is True.
+
         Returns:
             DataFrame of successful views kept after angle filtering, with
             per-panorama slope estimates (empty if none). Results for all
             images are saved to vision2slope_results_<timestamp>.csv.
         """
+        if self.config.processing_config.use_multiprocessing:
+            return self.process_batch_parallel()
+
         image_files = self._find_image_files()
         
         if not image_files:

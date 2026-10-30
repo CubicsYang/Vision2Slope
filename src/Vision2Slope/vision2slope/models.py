@@ -3,6 +3,7 @@ Segmentation model wrapper for Vision2Slope pipeline.
 """
 
 import logging
+from typing import Optional
 import torch
 import numpy as np
 from PIL import Image
@@ -14,24 +15,31 @@ from .core.interfaces import SegmentationProvider
 class SegmentationModel(SegmentationProvider):
     """Wrapper for semantic segmentation model."""
     
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, device: Optional[str] = None, cache_dir: Optional[str] = None):
         """
         Initialize segmentation model.
-        
+
         Args:
             model_name: HuggingFace model identifier
+            device: Torch device such as "cuda" or "cpu" (None = cuda if available)
+            cache_dir: Directory for downloaded model weights (None = HuggingFace default)
         """
         self.model_name = model_name
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.cache_dir = cache_dir
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = torch.device(device)
         self.logger = logging.getLogger(__name__)
         self._load_model()
-    
+
     def _load_model(self):
         """Load the pre-trained segmentation model."""
         try:
             self.logger.info(f"Loading segmentation model: {self.model_name}")
-            self.processor = AutoImageProcessor.from_pretrained(self.model_name)
-            self.model = Mask2FormerForUniversalSegmentation.from_pretrained(self.model_name)
+            self.processor = AutoImageProcessor.from_pretrained(self.model_name, cache_dir=self.cache_dir)
+            self.model = Mask2FormerForUniversalSegmentation.from_pretrained(
+                self.model_name, cache_dir=self.cache_dir
+            )
             self.model.to(self.device)
             self.model.eval()
             self.logger.info(f"Model loaded successfully on device: {self.device}")

@@ -55,7 +55,8 @@ class GSVDownloader:
         if streetview is None:
             raise ImportError(
                 "streetlevel is required for GSV downloading. "
-                "Install it with: pip install streetlevel"
+                "Install it with: pip install streetlevel "
+                "(or install vision2slope with the [gsv] extra)"
             )
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)

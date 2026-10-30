@@ -146,11 +146,8 @@ class ProcessingConfig:
     
     # Parallel processing
     num_workers: int = 1
-    use_multiprocessing: bool = False
-    
-    # Batch processing
-    batch_size: int = 1
-    
+    use_multiprocessing: bool = False  # process_batch delegates to process_batch_parallel
+
     # Image file extensions
     image_extensions: tuple = ('.png', '.jpg', '.jpeg', '.bmp', '.tiff')
     
@@ -174,8 +171,6 @@ class ProcessingConfig:
             raise ConfigurationError(f"log_level must be one of {valid_log_levels}")
         if self.num_workers < 0:
             raise ConfigurationError("num_workers must be non-negative")
-        if self.batch_size <= 0:
-            raise ConfigurationError("batch_size must be positive")
         if self.panorama_fov <= 0 or self.panorama_fov > 180:
             raise ConfigurationError("panorama_fov must be between 0 and 180 degrees")
         if len(self.panorama_aspects) != 2 or any(a <= 0 for a in self.panorama_aspects):
@@ -244,7 +239,8 @@ class PipelineConfig:
         """
         # Build sub-configurations
         model_config = ModelConfig(
-            model_name=args.model
+            model_name=args.model,
+            device=getattr(args, 'device', None)
         )
         
         detection_config = DetectionConfig(
