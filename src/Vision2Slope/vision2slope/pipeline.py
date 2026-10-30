@@ -26,6 +26,64 @@ from .utils import Utils
 from .pano2perspective import PanoramaTransformer
 
 
+class LegacyConfig:
+    """Flat config object expected by the detection, correction and analysis components."""
+
+
+def _build_legacy_config(config: PipelineConfig) -> LegacyConfig:
+    """
+    Create a legacy config object for compatibility with existing components.
+
+    This is a temporary adapter until all components are refactored.
+    Defined at module level so it can be pickled for worker processes.
+    """
+    cfg = LegacyConfig()
+
+    # Detection parameters
+    cfg.canny_threshold1 = config.detection_config.canny_threshold1
+    cfg.canny_threshold2 = config.detection_config.canny_threshold2
+    cfg.hough_threshold = config.detection_config.hough_threshold
+    cfg.min_line_length = config.detection_config.min_line_length
+    cfg.max_line_gap = config.detection_config.max_line_gap
+    cfg.angle_tolerance = config.detection_config.angle_tolerance
+
+    # Analysis parameters
+    cfg.min_edge_points = config.analysis_config.min_edge_points
+    cfg.use_weighted_average = config.analysis_config.use_weighted_average
+    cfg.morphology_kernel_size = config.analysis_config.morphology_kernel_size
+    cfg.ransac_residual_threshold = config.analysis_config.ransac_residual_threshold
+    cfg.ransac_max_trials = config.analysis_config.ransac_max_trials
+    cfg.ransac_random_state = config.analysis_config.ransac_random_state
+
+    return cfg
+
+
+# Processor owned by each worker process of process_batch_parallel
+_worker_processor: Optional[StandardImageProcessor] = None
+
+
+def _init_worker(config: PipelineConfig):
+    """Pool initializer: build one processor (and load the model once) per worker."""
+    global _worker_processor
+
+    legacy_config = _build_legacy_config(config)
+
+    # No visualizer in workers to avoid I/O contention
+    _worker_processor = StandardImageProcessor(
+        segmentation_provider=SegmentationModel(config.model_config.model_name),
+        skew_detector=SkewDetector(legacy_config),
+        corrector=ImageCorrector(legacy_config),
+        slope_analyzer=RoadSlopeAnalyzer(legacy_config),
+        visualizer=None,
+        logger=logging.getLogger('vision2slope.worker')
+    )
+
+
+def _process_image_worker(image_path: str) -> ProcessingResult:
+    """Worker function for multiprocessing (must be module-level to be picklable)."""
+    return _worker_processor.process(image_path)
+
+
 class Vision2SlopePipeline:
     """
     Vision2Slope pipeline with clean architecture.
@@ -168,13 +226,13 @@ class Vision2SlopePipeline:
         segmentation_provider = SegmentationModel(self.config.model_config.model_name)
         
         # Create legacy-compatible config for old components
-        legacy_config = self._create_legacy_config()
-        
+        legacy_config = _build_legacy_config(self.config)
+
         skew_detector = SkewDetector(legacy_config)
         corrector = ImageCorrector(legacy_config)
         slope_analyzer = RoadSlopeAnalyzer(legacy_config)
         visualizer = Visualizer(self.config.viz_config, self.config.output_dir)
-        
+
         processor = StandardImageProcessor(
             segmentation_provider=segmentation_provider,
             skew_detector=skew_detector,
@@ -183,39 +241,10 @@ class Vision2SlopePipeline:
             visualizer=visualizer,
             logger=self.logger
         )
-        
+
         self.logger.info("Pipeline components initialized successfully")
         return processor
-    
-    def _create_legacy_config(self):
-        """
-        Create a legacy config object for compatibility with existing components.
-        
-        This is a temporary adapter until all components are refactored.
-        """
-        class LegacyConfig:
-            pass
-        
-        cfg = LegacyConfig()
-        
-        # Detection parameters
-        cfg.canny_threshold1 = self.config.detection_config.canny_threshold1
-        cfg.canny_threshold2 = self.config.detection_config.canny_threshold2
-        cfg.hough_threshold = self.config.detection_config.hough_threshold
-        cfg.min_line_length = self.config.detection_config.min_line_length
-        cfg.max_line_gap = self.config.detection_config.max_line_gap
-        cfg.angle_tolerance = self.config.detection_config.angle_tolerance
-        
-        # Analysis parameters
-        cfg.min_edge_points = self.config.analysis_config.min_edge_points
-        cfg.use_weighted_average = self.config.analysis_config.use_weighted_average
-        cfg.morphology_kernel_size = self.config.analysis_config.morphology_kernel_size
-        cfg.ransac_residual_threshold = self.config.analysis_config.ransac_residual_threshold
-        cfg.ransac_max_trials = self.config.analysis_config.ransac_max_trials
-        cfg.ransac_random_state = self.config.analysis_config.ransac_random_state
-        
-        return cfg
-    
+
     def process_batch(self) -> pd.DataFrame:
         """
         Process all images in the input directory.
@@ -268,9 +297,7 @@ class Vision2SlopePipeline:
             num_workers = self.config.processing_config.num_workers
         if num_workers <= 0:
             num_workers = cpu_count()
-        
-        self.logger.info(f"Using {num_workers} worker processes")
-        
+
         image_files = self._find_image_files()
         
         if not image_files:
@@ -278,40 +305,15 @@ class Vision2SlopePipeline:
             return pd.DataFrame()
         
         self.logger.info(f"Found {len(image_files)} images to process")
-        
-        # Create a worker function that doesn't rely on instance state
-        def process_image_worker(image_path: str) -> ProcessingResult:
-            """Worker function for multiprocessing."""
-            # Create a new processor instance in each worker
-            from .models import SegmentationModel
-            from .detectors import SkewDetector
-            from .correctors import ImageCorrector
-            from .analyzers import RoadSlopeAnalyzer
-            
-            # Use minimal visualization in workers (save only essentials)
-            segmentation_provider = SegmentationModel(self.config.model_config.model_name)
-            
-            legacy_config = self._create_legacy_config()
-            skew_detector = SkewDetector(legacy_config)
-            corrector = ImageCorrector(legacy_config)
-            slope_analyzer = RoadSlopeAnalyzer(legacy_config)
-            
-            # No visualizer in workers to avoid I/O contention
-            processor = StandardImageProcessor(
-                segmentation_provider=segmentation_provider,
-                skew_detector=skew_detector,
-                corrector=corrector,
-                slope_analyzer=slope_analyzer,
-                visualizer=None,
-                logger=logging.getLogger('vision2slope.worker')
-            )
-            
-            return processor.process(image_path)
-        
+
+        # Each worker loads its own model once, so don't start more than needed
+        num_workers = min(num_workers, len(image_files))
+        self.logger.info(f"Using {num_workers} worker processes")
+
         # Process in parallel
-        with Pool(processes=num_workers) as pool:
+        with Pool(processes=num_workers, initializer=_init_worker, initargs=(self.config,)) as pool:
             results = list(tqdm(
-                pool.imap(process_image_worker, [str(f) for f in image_files]),
+                pool.imap(_process_image_worker, [str(f) for f in image_files]),
                 total=len(image_files),
                 desc="Processing images (parallel)"
             ))
