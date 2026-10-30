@@ -6,6 +6,7 @@ with pano_id, heading, lat, lon that can be used with the Vision2Slope pipeline.
 """
 
 import logging
+import math
 import time
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -19,6 +20,19 @@ except ImportError:
     streetview = None
 
 logger = logging.getLogger(__name__)
+
+
+def _heading_degrees(pano) -> float:
+    """
+    Convert a streetlevel panorama heading to degrees.
+
+    streetlevel reports heading in radians, while the pipeline compares it
+    with OSM edge bearings in degrees (north=0, clockwise). A missing heading
+    becomes NaN so the pipeline skips signed estimation for that panorama.
+    """
+    if pano.heading is None:
+        return float("nan")
+    return math.degrees(pano.heading) % 360
 
 
 class GSVDownloader:
@@ -86,7 +100,7 @@ class GSVDownloader:
                         "pano_id": pano.id,
                         "lat": pano.lat,
                         "lon": pano.lon,
-                        "heading": pano.heading or 0.0,
+                        "heading": _heading_degrees(pano),
                     }
                     if edge_bearings is not None:
                         record["edge_bearing"] = edge_bearings[i]
@@ -102,7 +116,7 @@ class GSVDownloader:
                     "pano_id": pano.id,
                     "lat": pano.lat,
                     "lon": pano.lon,
-                    "heading": pano.heading or 0.0,
+                    "heading": _heading_degrees(pano),
                 }
                 if edge_bearings is not None:
                     record["edge_bearing"] = edge_bearings[i]
@@ -110,7 +124,7 @@ class GSVDownloader:
 
                 logger.debug(
                     f"Downloaded {pano.id} at ({pano.lat}, {pano.lon}), "
-                    f"heading={pano.heading}"
+                    f"heading={record['heading']:.1f}°"
                 )
 
             except Exception as e:

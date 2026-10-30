@@ -40,7 +40,7 @@ class PanoramaTransformer:
         Args:
             input_dir: Input directory containing panoramic images
             output_dir: Output directory for perspective images
-            generate_left_right: If True, generate left (90°) and right (270°) views
+            generate_left_right: If True, generate right (90°) and left (270°) views
             
         Returns:
             List of paths to generated perspective images

@@ -27,7 +27,7 @@ def example_panorama_basic():
     pipeline = Vision2SlopePipeline(config)
     results_df = pipeline.process_batch()
     
-    print(f"Processed {len(results_df)} perspective views from panoramic images")
+    print(f"Perspective views with slope estimates: {len(results_df)}")
 
 
 if __name__ == "__main__":

@@ -150,28 +150,8 @@ class RoadSlopeAnalyzer(SlopeAnalysisProvider):
         Returns:
             Tuple of (slope, intercept, angle, road_area)
         """
-        try:
-            # Create road mask
-            road_mask = self.create_road_mask(semantic_map)
-            road_area = int(np.sum(road_mask))
-            
-            if road_area == 0:
-                return -999.0, -999.0, -999.0, 0
-            
-            # Extract road edge points
-            edge_points = self.extract_road_edge(road_mask)
-            
-            if edge_points is None or len(edge_points) < self.config.min_edge_points:
-                return -999.0, -999.0, -999.0, road_area
-            
-            # Fit line to edge points
-            slope, intercept, angle = self.fit_line_ransac(edge_points)
-            
-            return slope, intercept, angle, road_area
-            
-        except Exception as e:
-            self.logger.error(f"Road slope analysis failed: {e}")
-            return -999.0, -999.0, -999.0, 0
+        slope, intercept, angle, road_area, _, _ = self.analyze_road_slope_with_details(semantic_map)
+        return slope, intercept, angle, road_area
     
     def analyze_road_slope_with_details(self, semantic_map: np.ndarray) -> Tuple[float, float, float, int, np.ndarray, np.ndarray]:
         """
@@ -183,26 +163,21 @@ class RoadSlopeAnalyzer(SlopeAnalysisProvider):
         Returns:
             Tuple of (slope, intercept, angle, road_area, road_mask, edge_points)
         """
-        try:
-            # Create road mask
-            road_mask = self.create_road_mask(semantic_map)
-            road_area = int(np.sum(road_mask))
-            
-            if road_area == 0:
-                return -999.0, -999.0, -999.0, 0, road_mask, None
-            
-            # Extract road edge points
-            edge_points = self.extract_road_edge(road_mask)
-            
-            if edge_points is None or len(edge_points) < self.config.min_edge_points:
-                return -999.0, -999.0, -999.0, road_area, road_mask, edge_points
-            
-            # Fit line to edge points
-            slope, intercept, angle = self.fit_line_ransac(edge_points)
-            
-            return slope, intercept, angle, road_area, road_mask, edge_points
-            
-        except Exception as e:
-            self.logger.error(f"Road slope analysis failed: {e}")
-            return -999.0, -999.0, -999.0, 0, None, None
+        # Create road mask
+        road_mask = self.create_road_mask(semantic_map)
+        road_area = int(np.sum(road_mask))
+
+        if road_area == 0:
+            return -999.0, -999.0, -999.0, 0, road_mask, None
+
+        # Extract road edge points
+        edge_points = self.extract_road_edge(road_mask)
+
+        if edge_points is None or len(edge_points) < self.config.min_edge_points:
+            return -999.0, -999.0, -999.0, road_area, road_mask, edge_points
+
+        # Fit line to edge points (raises ValueError if RANSAC finds no consensus)
+        slope, intercept, angle = self.fit_line_ransac(edge_points)
+
+        return slope, intercept, angle, road_area, road_mask, edge_points
     

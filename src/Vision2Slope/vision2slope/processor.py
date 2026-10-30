@@ -92,13 +92,18 @@ class StandardImageProcessor(ImageProcessor):
             
             # Step 3: Skew detection
             self.logger.debug(f"Processing {filename}: Skew detection")
-            skew_angle, confidence = self.skew_detector.detect_skew(image, semantic_map)
+            try:
+                skew_angle, confidence = self.skew_detector.detect_skew(image, semantic_map)
+                # Get lines for visualization
+                lines = self.skew_detector.get_vertical_lines(image, semantic_map)
+            except Exception as e:
+                raise ProcessingError(
+                    f"Skew detection failed: {e}", filename=filename, stage="skew_detection"
+                ) from e
             result.skew_angle = skew_angle
             result.skew_confidence = confidence
             result.stage_completed = ProcessingStage.SKEW_DETECTION
-            
-            # Get lines for visualization
-            lines = self.skew_detector.get_vertical_lines(image, semantic_map)
+
             result.num_lines_detected = len(lines) if lines is not None else 0
             
             if self.visualizer and lines is not None:
@@ -117,7 +122,12 @@ class StandardImageProcessor(ImageProcessor):
             if abs(skew_angle) > 0.1:
                 self.logger.debug(f"Processing {filename}: Image correction (angle={skew_angle:.2f}°)")
                 cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-                corrected_image = self.corrector.correct(cv_image, skew_angle)
+                try:
+                    corrected_image = self.corrector.correct(cv_image, skew_angle)
+                except Exception as e:
+                    raise ProcessingError(
+                        f"Image correction failed: {e}", filename=filename, stage="correction"
+                    ) from e
                 
                 if self.visualizer:
                     corrected_filename = self.visualizer.save_corrected_image(corrected_image, filename)
@@ -135,8 +145,13 @@ class StandardImageProcessor(ImageProcessor):
             
             # Step 5: Road slope analysis
             self.logger.debug(f"Processing {filename}: Road slope analysis")
-            slope, intercept, angle, road_area, road_mask, edge_points = \
-                self.slope_analyzer.analyze_with_details(corrected_semantic_map)
+            try:
+                slope, intercept, angle, road_area, road_mask, edge_points = \
+                    self.slope_analyzer.analyze_with_details(corrected_semantic_map)
+            except Exception as e:
+                raise ProcessingError(
+                    f"Road slope analysis failed: {e}", filename=filename, stage="slope_estimation"
+                ) from e
             result.road_edge_line_slope = slope
             result.road_edge_line_intercept = intercept
             result.road_edge_line_angle = angle
@@ -188,7 +203,11 @@ class StandardImageProcessor(ImageProcessor):
             result.error_message = str(e)
             
         except ProcessingError as e:
-            self.logger.error(f"Processing error for {filename} at stage {e.stage}: {e}")
+            # Include the traceback when a component raised an unexpected error
+            self.logger.error(
+                f"Processing error for {filename} at stage {e.stage}: {e}",
+                exc_info=e.__cause__ is not None
+            )
             if e.stage == "skew_detection":
                 result.status = ProcessingStatus.SKEW_FAILED
             elif e.stage == "correction":

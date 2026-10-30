@@ -168,7 +168,9 @@ class ProcessingConfig:
     def validate(self):
         """Validate processing configuration."""
         valid_log_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-        if self.log_level.upper() not in valid_log_levels:
+        # Normalize case so the pipeline can pass it to getattr(logging, ...)
+        self.log_level = self.log_level.upper()
+        if self.log_level not in valid_log_levels:
             raise ConfigurationError(f"log_level must be one of {valid_log_levels}")
         if self.num_workers < 0:
             raise ConfigurationError("num_workers must be non-negative")

@@ -110,10 +110,12 @@ def main():
         else:
             results_df = pipeline.process_batch()
         
+        # results_df holds only the views kept for slope estimation
         if len(results_df) > 0:
-            print(f"\nProcessing completed! {len(results_df)} images processed.")
+            print(f"\nProcessing completed! Slope estimates for {results_df['pano_id'].nunique()} panoramas "
+                  f"from {len(results_df)} views.")
         else:
-            print("No images were processed successfully.")
+            print("No views passed processing and angle filtering; see pipeline.log for per-image status.")
             
     except KeyboardInterrupt:
         print("\nProcessing interrupted by user")

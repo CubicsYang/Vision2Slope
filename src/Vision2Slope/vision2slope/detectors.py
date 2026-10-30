@@ -42,33 +42,28 @@ class SkewDetector(SkewDetectionProvider):
         Returns:
             Detected lines or None if no lines found
         """
-        try:
-            # Convert to grayscale and apply Gaussian blur
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-            
-            # Apply Canny edge detection
-            edges = cv2.Canny(
-                blurred, 
-                self.config.canny_threshold1, 
-                self.config.canny_threshold2
-            )
-            
-            # Detect lines using Hough Transform
-            lines = cv2.HoughLinesP(
-                edges,
-                rho=1.0,
-                theta=np.pi/180,
-                threshold=self.config.hough_threshold,
-                minLineLength=self.config.min_line_length,
-                maxLineGap=self.config.max_line_gap
-            )
-            
-            return lines
-            
-        except Exception as e:
-            self.logger.error(f"Line detection failed: {e}")
-            return None
+        # Convert to grayscale and apply Gaussian blur
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+
+        # Apply Canny edge detection
+        edges = cv2.Canny(
+            blurred,
+            self.config.canny_threshold1,
+            self.config.canny_threshold2
+        )
+
+        # Detect lines using Hough Transform
+        lines = cv2.HoughLinesP(
+            edges,
+            rho=1.0,
+            theta=np.pi/180,
+            threshold=self.config.hough_threshold,
+            minLineLength=self.config.min_line_length,
+            maxLineGap=self.config.max_line_gap
+        )
+
+        return lines
     
     def filter_lines_by_mask(self, lines: np.ndarray, mask: np.ndarray) -> np.ndarray:
         """
@@ -209,45 +204,40 @@ class SkewDetector(SkewDetectionProvider):
         Returns:
             Filtered lines as numpy array. Returns empty array if no lines found.
         """
-        try:
-            # Convert PIL image to OpenCV format
-            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-            
-            # Create masks for vegetation
-            vegetation_mask = (semantic_map == self.VEGETATION_CLASS_ID).astype(np.uint8)
-            
-            # Create masks for building, fence, guard rail, and wall
-            building_mask = (semantic_map == self.BUILDING_CLASS_ID).astype(np.uint8)
-            fence_mask = (semantic_map == self.FENCE_CLASS_ID).astype(np.uint8)
-            guard_rail_mask = (semantic_map == self.GUARD_RAIL_CLASS_ID).astype(np.uint8)
-            wall_mask = (semantic_map == self.WALL_CLASS_ID).astype(np.uint8)
-            
-            # Combine masks, including building, fence, guard rail, and wall
-            intersection_mask = (
-                building_mask | fence_mask | guard_rail_mask | wall_mask
-            )
-            
-            # Detect lines
-            lines = self.detect_lines(cv_image)
-            
-            if lines is None or lines.size == 0:
-                return np.array([])
-            
-            # Filter lines that intersect with vegetation mask
-            tree_lines = self.filter_lines_by_mask(lines, vegetation_mask)
-            if tree_lines is not None and tree_lines.size > 0:
-                # Remove tree lines from lines
-                lines = np.array([line for line in lines 
-                                 if not any(np.all(line == tree_line) for tree_line in tree_lines)])
-            
-            # Filter lines using semantic(building) mask
-            filtered_lines = self.filter_lines_by_mask(lines, intersection_mask)
-            
-            return filtered_lines if filtered_lines is not None else np.array([])
-            
-        except Exception as e:
-            self.logger.error(f"Failed to get masked lines: {e}")
+        # Convert PIL image to OpenCV format
+        cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+        # Create masks for vegetation
+        vegetation_mask = (semantic_map == self.VEGETATION_CLASS_ID).astype(np.uint8)
+
+        # Create masks for building, fence, guard rail, and wall
+        building_mask = (semantic_map == self.BUILDING_CLASS_ID).astype(np.uint8)
+        fence_mask = (semantic_map == self.FENCE_CLASS_ID).astype(np.uint8)
+        guard_rail_mask = (semantic_map == self.GUARD_RAIL_CLASS_ID).astype(np.uint8)
+        wall_mask = (semantic_map == self.WALL_CLASS_ID).astype(np.uint8)
+
+        # Combine masks, including building, fence, guard rail, and wall
+        intersection_mask = (
+            building_mask | fence_mask | guard_rail_mask | wall_mask
+        )
+
+        # Detect lines
+        lines = self.detect_lines(cv_image)
+
+        if lines is None or lines.size == 0:
             return np.array([])
+
+        # Filter lines that intersect with vegetation mask
+        tree_lines = self.filter_lines_by_mask(lines, vegetation_mask)
+        if tree_lines is not None and tree_lines.size > 0:
+            # Remove tree lines from lines
+            lines = np.array([line for line in lines
+                             if not any(np.all(line == tree_line) for tree_line in tree_lines)])
+
+        # Filter lines using semantic(building) mask
+        filtered_lines = self.filter_lines_by_mask(lines, intersection_mask)
+
+        return filtered_lines if filtered_lines is not None else np.array([])
     
     def get_vertical_lines(self, image: Image.Image, semantic_map: np.ndarray) -> np.ndarray:
         """
@@ -264,26 +254,21 @@ class SkewDetector(SkewDetectionProvider):
         Returns:
             Filtered near-vertical lines as numpy array. Returns empty array if no lines found.
         """
-        try:
-            # Get lines filtered by semantic masks
-            masked_lines = self.get_masked_lines(image, semantic_map)
-            
-            if masked_lines.size == 0:
-                return np.array([])
-            
-            # Filter lines by angle using calculate_line_angle
-            vertical_lines = []
-            for line in masked_lines:
-                angle = self.calculate_line_angle(line)
-                # Only keep lines with valid angles (near-vertical)
-                if not np.isnan(angle):
-                    vertical_lines.append(line)
-            
-            return np.array(vertical_lines) if vertical_lines else np.array([])
-            
-        except Exception as e:
-            self.logger.error(f"Failed to get vertical lines: {e}")
+        # Get lines filtered by semantic masks
+        masked_lines = self.get_masked_lines(image, semantic_map)
+
+        if masked_lines.size == 0:
             return np.array([])
+
+        # Filter lines by angle using calculate_line_angle
+        vertical_lines = []
+        for line in masked_lines:
+            angle = self.calculate_line_angle(line)
+            # Only keep lines with valid angles (near-vertical)
+            if not np.isnan(angle):
+                vertical_lines.append(line)
+
+        return np.array(vertical_lines) if vertical_lines else np.array([])
     
     def detect_skew(self, image: Image.Image, semantic_map: np.ndarray) -> Tuple[float, int]:
         """
@@ -296,19 +281,14 @@ class SkewDetector(SkewDetectionProvider):
         Returns:
             Tuple of (skew_angle, confidence_score)
         """
-        try:
-            # Get near-vertical lines filtered by semantic masks
-            vertical_lines = self.get_vertical_lines(image, semantic_map)
-            
-            if vertical_lines.size == 0:
-                return 0.0, 0
-            
-            # Estimate skew angle
-            skew_angle, confidence = self.estimate_skew_angle(vertical_lines)
-            
-            return skew_angle, confidence
-            
-        except Exception as e:
-            self.logger.error(f"Skew detection failed: {e}")
+        # Get near-vertical lines filtered by semantic masks
+        vertical_lines = self.get_vertical_lines(image, semantic_map)
+
+        if vertical_lines.size == 0:
             return 0.0, 0
+
+        # Estimate skew angle
+        skew_angle, confidence = self.estimate_skew_angle(vertical_lines)
+
+        return skew_angle, confidence
     

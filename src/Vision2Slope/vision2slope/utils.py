@@ -161,13 +161,16 @@ class Utils:
         """
         Compute signed slope along the OSM edge (u→v) direction.
 
-        Geometry:
+        Geometry (zensvi Direction_θ looks θ degrees clockwise from the
+        panorama center, i.e. the camera heading; image y points down, so a
+        positive road_edge_angle means the edge descends toward image right):
         - Right view (perspective=90°): image left→right corresponds to
-          behind-heading → ahead-of-heading. Positive road_edge_angle means
-          the road goes uphill in the heading direction.
+          ahead-of-heading → behind-heading. The edge rises toward the
+          heading side, so a positive angle means uphill in the heading
+          direction (sign kept).
         - Left view (perspective=270°): image left→right corresponds to
-          ahead-of-heading → behind-heading. Positive road_edge_angle means
-          the road goes downhill in the heading direction (sign is inverted).
+          behind-heading → ahead-of-heading. A positive angle means the edge
+          descends toward the heading side, i.e. downhill (sign inverted).
         - If heading aligns with edge_bearing (Δ < 90°), keep the sign.
           If opposite (Δ > 90°), flip the sign.
 

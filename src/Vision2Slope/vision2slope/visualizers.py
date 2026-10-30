@@ -45,7 +45,8 @@ class Visualizer(VisualizationProvider):
             self.intermediate_dir = self.output_dir / self.config.intermediate_dir_name
             self.intermediate_dir.mkdir(exist_ok=True, parents=True)
         
-        if self.config.save_segmentation_masks:
+        # Segmentation masks and road masks share this directory
+        if self.config.save_segmentation_masks or self.config.save_road_masks:
             self.masks_dir = self.output_dir / self.config.masks_dir_name
             self.masks_dir.mkdir(exist_ok=True, parents=True)
         
@@ -60,7 +61,26 @@ class Visualizer(VisualizationProvider):
         if self.config.save_road_edge_fitting:
             self.road_edge_fitting_dir = self.output_dir / self.config.road_edge_fitting_dir_name
             self.road_edge_fitting_dir.mkdir(exist_ok=True, parents=True)
-    
+
+    @staticmethod
+    def _output_name(filename: str, tag: str, figure: bool = False) -> str:
+        """
+        Build an output filename '<stem>_<tag><ext>' from an input filename.
+
+        Args:
+            filename: Original filename
+            tag: Suffix describing the output (e.g. 'road_mask')
+            figure: True for matplotlib figures, which cannot be saved as BMP
+
+        Returns:
+            Output filename keeping the input extension (lowercased)
+        """
+        path = Path(filename)
+        ext = path.suffix.lower()
+        if figure and ext == '.bmp':
+            ext = '.png'
+        return f"{path.stem}_{tag}{ext}"
+
     def save_segmentation_mask(self, semantic_map: np.ndarray, filename: str):
         """
         Save semantic segmentation mask visualization.
@@ -74,7 +94,7 @@ class Visualizer(VisualizationProvider):
         
         try:
             semantic_rgb = Utils.render_semantic_segmentation(semantic_map)
-            output_path = self.masks_dir / filename.replace('.png', '_segmentation.png').replace('.jpg', '_segmentation.jpg')
+            output_path = self.masks_dir / self._output_name(filename, 'segmentation')
             cv2.imwrite(str(output_path), cv2.cvtColor(semantic_rgb, cv2.COLOR_RGB2BGR))
         except Exception as e:
             self.logger.error(f"Failed to save segmentation mask: {e}")
@@ -91,7 +111,7 @@ class Visualizer(VisualizationProvider):
             return
         
         try:
-            output_path = self.masks_dir / filename.replace('.png', '_road_mask.png').replace('.jpg', '_road_mask.jpg')
+            output_path = self.masks_dir / self._output_name(filename, 'road_mask')
             cv2.imwrite(str(output_path), road_mask * 255)
         except Exception as e:
             self.logger.error(f"Failed to save road mask: {e}")
@@ -112,7 +132,7 @@ class Visualizer(VisualizationProvider):
             blurred = cv2.GaussianBlur(gray, (3, 3), 0)
             edges = cv2.Canny(blurred, 50, 150)
             
-            output_path = self.edges_dir / filename.replace('.png', '_edges.png').replace('.jpg', '_edges.jpg')
+            output_path = self.edges_dir / self._output_name(filename, 'edges')
             cv2.imwrite(str(output_path), edges)
         except Exception as e:
             self.logger.error(f"Failed to save edge detection: {e}")
@@ -139,7 +159,7 @@ class Visualizer(VisualizationProvider):
                     x1, y1, x2, y2 = line[0]
                     cv2.line(vis_image, (x1, y1), (x2, y2), (255, 255, 255), 2)
             
-            output_path = self.lines_dir / filename.replace('.png', '_lines.png').replace('.jpg', '_lines.jpg')
+            output_path = self.lines_dir / self._output_name(filename, 'lines')
             cv2.imwrite(str(output_path), vis_image)
         except Exception as e:
             self.logger.error(f"Failed to save line detection: {e}")
@@ -159,7 +179,7 @@ class Visualizer(VisualizationProvider):
             return ""
         
         try:
-            corrected_filename = filename.replace('.png', '_corrected.png').replace('.jpg', '_corrected.jpg')
+            corrected_filename = self._output_name(filename, 'corrected')
             output_path = self.corrected_dir / corrected_filename
             cv2.imwrite(str(output_path), corrected_image)
             return corrected_filename
@@ -235,7 +255,7 @@ class Visualizer(VisualizationProvider):
             plt.tight_layout()
             
             # Save figure
-            output_filename = filename.replace('.png', '_road_edge_fitting.png').replace('.jpg', '_road_edge_fitting.jpg')
+            output_filename = self._output_name(filename, 'road_edge_fitting', figure=True)
             output_path = self.road_edge_fitting_dir / output_filename
             plt.savefig(output_path, bbox_inches='tight', dpi=self.config.figure_dpi)
             plt.close(fig)
@@ -287,7 +307,7 @@ class Visualizer(VisualizationProvider):
             
             plt.tight_layout()
             
-            viz_filename = result.filename.replace('.png', '_analysis.png').replace('.jpg', '_analysis.jpg')
+            viz_filename = self._output_name(result.filename, 'analysis', figure=True)
             viz_path = self.viz_dir / viz_filename
             plt.savefig(viz_path, bbox_inches='tight', dpi=self.config.figure_dpi)
             plt.close(fig)

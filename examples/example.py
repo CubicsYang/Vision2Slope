@@ -23,8 +23,10 @@ def example_basic_usage():
     pipeline = Vision2SlopePipeline(config)
     results_df = pipeline.process_batch()
     
-    print(f"Processed {len(results_df)} images")
-    print(f"Successful: {len(results_df[results_df['status'] == 'success'])}")
+    # results_df holds the successful views kept after angle filtering
+    print(f"Views with slope estimates: {len(results_df)}")
+    if len(results_df) > 0:
+        print(f"Panoramas with slope estimates: {results_df['pano_id'].nunique()}")
 
 
 def example_custom_visualization():
@@ -93,7 +95,7 @@ def example_multiprocessing():
     pipeline = Vision2SlopePipeline(config)
     results_df = pipeline.process_batch_parallel()
     
-    print(f"Processed {len(results_df)} images using multiprocessing")
+    print(f"Views with slope estimates (multiprocessing): {len(results_df)}")
 
 
 def example_minimal_visualization():
@@ -110,7 +112,6 @@ def example_minimal_visualization():
             save_road_masks=False,
             save_edge_detection=False,
             save_line_detection=False,
-            save_ppht_results=True,  # Save PPHT results
             save_road_edge_fitting=True  # Save road edge fitting visualization
         )
     )
@@ -133,7 +134,6 @@ def example_road_edge_visualization():
             save_road_masks=True,  # Keep road masks
             save_edge_detection=False,
             save_line_detection=False,
-            save_ppht_results=False,
             save_road_edge_fitting=True,  # Enable road edge fitting visualization
             figure_dpi=200  # Higher quality for detailed analysis
         ),

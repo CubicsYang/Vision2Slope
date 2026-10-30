@@ -147,7 +147,7 @@ class Vision2SlopePipeline:
         
         This method will:
         1. Create a subdirectory for perspective views
-        2. Transform panoramic images to left (90°) and right (270°) views
+        2. Transform panoramic images to right (90°) and left (270°) views
         3. Update input_dir to point to the perspective views directory
         """
         self.logger.info("=" * 60)
@@ -169,7 +169,7 @@ class Vision2SlopePipeline:
             generated_files = panorama_transformer.transform_panorama(
                 input_dir=self.config.input_dir,
                 output_dir=str(perspective_dir),
-                generate_left_right=True  # Generate left (90°) and right (270°) views
+                generate_left_right=True  # Generate right (90°) and left (270°) views
             )
             
             self.logger.info(f"Generated {len(generated_files)} perspective views")
@@ -250,7 +250,9 @@ class Vision2SlopePipeline:
         Process all images in the input directory.
         
         Returns:
-            DataFrame with processing results
+            DataFrame of successful views kept after angle filtering, with
+            per-panorama slope estimates (empty if none). Results for all
+            images are saved to vision2slope_results_<timestamp>.csv.
         """
         image_files = self._find_image_files()
         
@@ -279,7 +281,7 @@ class Vision2SlopePipeline:
             self._save_intermediate_results(df)
         
         # Print summary
-        self._print_summary(bi_estimate_df)
+        self._print_summary(df, bi_estimate_df)
         
         return bi_estimate_df
     
@@ -291,7 +293,9 @@ class Vision2SlopePipeline:
             num_workers: Number of worker processes (None = use config)
             
         Returns:
-            DataFrame with processing results
+            DataFrame of successful views kept after angle filtering, with
+            per-panorama slope estimates (empty if none). Results for all
+            images are saved to vision2slope_results_<timestamp>.csv.
         """
         if num_workers is None:
             num_workers = self.config.processing_config.num_workers
@@ -328,7 +332,7 @@ class Vision2SlopePipeline:
         if self.config.viz_config.save_intermediate_results:
             self._save_intermediate_results(df)
         
-        self._print_summary(bi_estimate_df)
+        self._print_summary(df, bi_estimate_df)
 
         return bi_estimate_df
 
@@ -374,7 +378,7 @@ class Vision2SlopePipeline:
 
         if filtered_df.empty:
             self.logger.warning("No successful results for bi-directional slope estimation")
-            return df
+            return filtered_df
 
         # Extract pano_id and perspective_angle from filename
         filtered_df['pano_id'] = filtered_df['filename'].apply(Utils.get_pano_id_from_path)
@@ -389,7 +393,7 @@ class Vision2SlopePipeline:
 
         if filtered_df.empty:
             self.logger.warning("No valid segments after angle filtering")
-            return df
+            return filtered_df
 
         self.logger.info(f"Found {len(filtered_df)} valid segments for bi-directional estimation")
 
@@ -404,6 +408,13 @@ class Vision2SlopePipeline:
 
             required_cols = {'pano_id', 'heading', 'edge_bearing'}
             if required_cols.issubset(metadata_df.columns):
+                # Older GSVDownloader versions wrote streetlevel's heading in radians
+                headings = metadata_df['heading'].dropna()
+                if len(headings) > 1 and headings.abs().max() <= 2 * np.pi:
+                    self.logger.warning(
+                        "All headings in metadata_csv are within [0, 2π] and look like radians; "
+                        "heading must be in degrees (north=0, clockwise), otherwise slope signs are wrong"
+                    )
                 filtered_df = filtered_df.merge(
                     metadata_df[['pano_id', 'heading', 'edge_bearing']],
                     on='pano_id',
@@ -497,8 +508,14 @@ class Vision2SlopePipeline:
         
         self.logger.info(f"Intermediate results saved to: {intermediate_dir}")
     
-    def _print_summary(self, df: pd.DataFrame):
-        """Print processing summary statistics."""
+    def _print_summary(self, df: pd.DataFrame, estimate_df: pd.DataFrame):
+        """
+        Print processing summary statistics.
+
+        Args:
+            df: Per-image results for all processed images
+            estimate_df: Filtered and aggregated rows from _bi_slope_estimate
+        """
         if df is None or df.empty:
             self.logger.warning("No data available for summary")
             return
@@ -524,7 +541,15 @@ class Vision2SlopePipeline:
             self.logger.info(f"  Avg road edge line angle: {successful_df['road_edge_line_angle'].mean():.2f}°")
             self.logger.info(f"  Avg road area: {successful_df['road_area'].mean():.0f} pixels")
 
-            if 'road_estimated_slope' in successful_df.columns:
-                self.logger.info(f"  Avg road estimated slope: {successful_df['road_estimated_slope'].mean():.2f}°")
+        # Statistics for the filtered, per-panorama estimates
+        if 'road_estimated_slope' in estimate_df.columns:
+            per_pano = estimate_df.drop_duplicates(subset='pano_id')['road_estimated_slope'].dropna()
+            self.logger.info("\nSlope Estimates:")
+            self.logger.info(f"  Views kept after angle filtering: {len(estimate_df)}")
+            self.logger.info(f"  Panoramas with an estimate: {len(per_pano)}")
+            if len(per_pano) > 0:
+                self.logger.info(f"  Avg |road estimated slope| per panorama: {per_pano.abs().mean():.2f}°")
+        else:
+            self.logger.info("\nSlope Estimates: none (no views passed processing and angle filtering)")
 
         self.logger.info("=" * 60)
