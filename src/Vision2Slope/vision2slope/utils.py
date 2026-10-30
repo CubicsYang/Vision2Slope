@@ -161,7 +161,7 @@ class Utils:
         """
         Compute signed slope along the OSM edge (u→v) direction.
 
-        Geometry (zensvi Direction_θ looks θ degrees clockwise from the
+        Geometry (Direction_θ from pano2perspective looks θ degrees clockwise from the
         panorama center, i.e. the camera heading; image y points down, so a
         positive road_edge_angle means the edge descends toward image right):
         - Right view (perspective=90°): image left→right corresponds to

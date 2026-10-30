@@ -183,8 +183,8 @@ class Vision2SlopePipeline:
             self.logger.info("=" * 60)
             
             # Update config to process perspective views instead of originals
-            # Note: zensvi.transform.ImageTransformer creates nested subdirectories
-            # Check for the actual location of generated files
+            # PanoramaTransformer writes views into nested subdirectories
+            # (perspective/, mirroring input subfolders); find where they are
             actual_perspective_dir = self._find_actual_perspective_dir(perspective_dir)
             self.config.input_dir = str(actual_perspective_dir)
             self.logger.info(f"Updated input directory to: {self.config.input_dir}")
@@ -197,8 +197,8 @@ class Vision2SlopePipeline:
         """
         Find the actual directory containing perspective images.
         
-        zensvi.transform.ImageTransformer creates nested subdirectories,
-        so we need to search for the actual location of generated files.
+        PanoramaTransformer writes views under a 'perspective/' subdirectory
+        (mirroring input subfolders), so search for the actual location.
         
         Args:
             base_dir: Base directory to search from

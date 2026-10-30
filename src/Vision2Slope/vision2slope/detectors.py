@@ -63,6 +63,10 @@ class SkewDetector(SkewDetectionProvider):
             maxLineGap=self.config.max_line_gap
         )
 
+        # OpenCV 4 returns (N, 1, 4) and OpenCV 5 returns (N, 4); keep the (N, 1, 4) layout
+        if lines is not None:
+            lines = lines.reshape(-1, 1, 4)
+
         return lines
     
     def filter_lines_by_mask(self, lines: np.ndarray, mask: np.ndarray) -> np.ndarray:

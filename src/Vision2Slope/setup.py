@@ -37,12 +37,15 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
     ],
-    # zensvi requires Python >=3.9,<3.13
     python_requires=">=3.9",
     install_requires=requirements,
     extras_require={
         "gsv": ["streetlevel"],
+        # zensvi (Mapillary downloader in the tutorial) only supports Python <3.13;
+        # the marker stops pip from backtracking to old zensvi releases on newer Pythons
+        "mapillary": ['zensvi>=1.4; python_version < "3.13"'],
         "test": ["pytest"],
     },
     entry_points={
