@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -89,6 +91,22 @@ def test_new_pipeline_closes_previous_log_handlers(input_dir, tmp_path):
     file_handler = next(h for h in first.logger.handlers if hasattr(h, "baseFilename"))
     Vision2SlopePipeline(config)
     assert file_handler.stream is None
+
+
+def test_pipeline_logs_are_not_duplicated_by_root_handlers(input_dir, tmp_path):
+    # Colab/Jupyter attach a root handler; records must not reach it as well
+    root_records = []
+    root_handler = logging.Handler()
+    root_handler.emit = root_records.append
+    logging.getLogger().addHandler(root_handler)
+    try:
+        config = PipelineConfig(input_dir=str(input_dir), output_dir=str(tmp_path / "out"))
+        Vision2SlopePipeline(config)
+        logging.getLogger("vision2slope.detectors").warning("from a module logger")
+    finally:
+        logging.getLogger().removeHandler(root_handler)
+    assert root_records == []
+    assert "from a module logger" in (tmp_path / "out" / "pipeline.log").read_text()
 
 
 def test_visualizer_output_names_keep_extension(tmp_path):

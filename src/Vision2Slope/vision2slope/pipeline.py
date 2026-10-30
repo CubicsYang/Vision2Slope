@@ -144,7 +144,11 @@ class Vision2SlopePipeline:
         
         logger.addHandler(file_handler)
         logger.addHandler(console_handler)
-        
+
+        # Our handlers already print; don't also pass records to root handlers
+        # (Colab/Jupyter configure one, which printed every line twice)
+        logger.propagate = False
+
         return logger
     
     def _prepare_panorama_images(self):
