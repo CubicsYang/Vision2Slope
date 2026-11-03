@@ -1,7 +1,8 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.9%E2%80%933.13-blue.svg)](https://www.python.org/downloads/)
 [![UAL](https://img.shields.io/badge/UAL-Postprint-2ea44f.svg)](https://ual.sg/publication/2026-ijgis-vision-2-slope/2026-ijgis-vision-2-slope.pdf)
 [![IJGIS](https://img.shields.io/badge/IJGIS-DOI%3A10.1080%2F13658816.2026.2656269-1f6feb.svg)](https://www.doi.org/10.1080/13658816.2026.2656269)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/CubicsYang/Vision2Slope/blob/main/examples/Vision2Slope_Tutorial_colab.ipynb)
 
 <div align="center">
     <a href="" title="Vision2Slope — Street-view-based urban slope estimation framework">
@@ -41,6 +42,8 @@ Vision2Slope builds on a simple but powerful observation illustrated in this fig
 
 ### Example Code Snippet and Tutorial
 Please refer to the [Tutorial](examples/Vision2Slope_Tutorial.ipynb) or [Script](examples/example.py) for detailed instructions on how to use Vision2Slope for slope estimation from street view images.
+
+To try it without a local setup, open the [Colab tutorial](https://colab.research.google.com/github/CubicsYang/Vision2Slope/blob/main/examples/Vision2Slope_Tutorial_colab.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/CubicsYang/Vision2Slope/blob/main/examples/Vision2Slope_Tutorial_colab.ipynb). It installs Vision2Slope and runs the bundled sample images; use a GPU runtime (*Runtime → Change runtime type → T4 GPU*).
 
 ------
 ### Quick prompts based on the tutorial
